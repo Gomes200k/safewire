@@ -1,0 +1,1134 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SafeWire — Painel de monitoramento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- SDK do Socket.io: recebe em tempo real os dados enviados pelo ESP via server.js -->
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<style>
+:root{
+  --black:#0B0B0B; --white:#F5F5F5; --red:#FF2D2D; --orange:#FF8A00; --yellow:#FFD600;
+  --card:#151515; --card-border:#242424; --muted:#8a8a8a; --green:#28D17C;
+  --sans:'Space Grotesk',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--black);color:var(--white);font-family:var(--sans);line-height:1.5;}
+a{color:inherit;text-decoration:none;}
+button{font-family:inherit;cursor:pointer;}
+input,select,textarea{font-family:inherit;}
+::selection{background:var(--orange);color:var(--black);}
+
+.btn{display:inline-flex;align-items:center;gap:8px;padding:12px 20px;border-radius:10px;border:1px solid var(--card-border);
+  font-weight:600;font-size:0.9rem;background:var(--card);color:var(--white);transition:.12s;}
+.btn:hover{border-color:var(--orange);}
+.btn:active{transform:scale(.98);}
+.btn.primary{background:var(--orange);color:var(--black);border-color:var(--orange);}
+.btn.primary:hover{background:#ffa53d;}
+.btn.danger{background:transparent;color:var(--red);border-color:#3a1515;}
+.btn.danger:hover{border-color:var(--red);}
+.btn.ghost{background:transparent;}
+.btn.small{padding:8px 13px;font-size:0.8rem;border-radius:8px;}
+.btn.full{width:100%;justify-content:center;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.badge{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-size:0.72rem;font-weight:600;font-family:var(--mono);}
+.badge.normal{background:rgba(40,209,124,.12);color:var(--green);}
+.badge.attention{background:rgba(255,214,0,.12);color:var(--yellow);}
+.badge.elevated{background:rgba(255,138,0,.14);color:var(--orange);}
+.badge.critical{background:rgba(255,45,45,.14);color:var(--red);}
+.badge.offline{background:rgba(255,255,255,.06);color:var(--muted);}
+.badge.sim{background:rgba(255,214,0,.12);color:var(--yellow);}
+.badge.real{background:rgba(40,209,124,.12);color:var(--green);}
+
+/* ================= AUTH SCREEN ================= */
+#authScreen{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.auth-box{width:100%;max-width:420px;}
+.auth-logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:1.3rem;justify-content:center;margin-bottom:6px;}
+.auth-logo .dot{width:10px;height:10px;border-radius:50%;background:var(--orange);box-shadow:0 0 10px var(--orange);}
+.auth-tag{text-align:center;color:var(--muted);font-size:0.85rem;margin-bottom:32px;}
+.auth-tabs{display:flex;border:1px solid var(--card-border);border-radius:12px;padding:4px;margin-bottom:26px;background:var(--card);}
+.auth-tabs button{flex:1;padding:10px;border:none;background:none;color:var(--muted);border-radius:9px;font-weight:600;font-size:0.88rem;}
+.auth-tabs button.active{background:var(--white);color:var(--black);}
+.auth-panel{display:none;}
+.auth-panel.active{display:block;}
+.field{margin-bottom:15px;}
+.field label{display:block;font-size:0.78rem;color:var(--muted);margin-bottom:6px;}
+.field input, .field select, .field textarea{
+  width:100%;background:#0f0f0f;border:1px solid var(--card-border);border-radius:9px;padding:11px 13px;
+  color:var(--white);font-size:0.9rem;}
+.field input:focus,.field select:focus,.field textarea:focus{outline:1px solid var(--orange);border-color:var(--orange);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-error{background:rgba(255,45,45,.1);border:1px solid #3a1515;color:#ff8080;font-size:0.82rem;padding:10px 13px;border-radius:9px;margin-bottom:16px;display:none;}
+.form-error.show{display:block;}
+.form-hint{font-size:0.78rem;color:var(--muted);margin-top:16px;text-align:center;}
+.demo-hint{margin-top:22px;border:1px dashed var(--card-border);border-radius:10px;padding:12px 14px;font-size:0.78rem;color:var(--muted);text-align:center;}
+.demo-hint b{color:var(--yellow);font-family:var(--mono);}
+
+/* ================= APP SHELL ================= */
+#appScreen{display:none;min-height:100vh;}
+#appScreen.active{display:flex;}
+.sidebar{
+  width:240px;flex-shrink:0;background:var(--card);border-right:1px solid var(--card-border);
+  display:flex;flex-direction:column;position:sticky;top:0;height:100vh;transition:width .2s;
+}
+.sidebar.collapsed{width:76px;}
+.sidebar-top{padding:22px 20px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--card-border);}
+.sidebar-logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:1.05rem;white-space:nowrap;overflow:hidden;}
+.sidebar-logo .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);flex-shrink:0;}
+.sidebar-logo .dot.demo{background:var(--yellow);box-shadow:0 0 8px var(--yellow);}
+.collapse-btn{background:none;border:none;color:var(--muted);font-size:0.9rem;}
+.sidebar-nav{flex:1;padding:16px 12px;display:flex;flex-direction:column;gap:2px;}
+.sidebar-nav button{
+  display:flex;align-items:center;gap:12px;padding:11px 14px;border:none;background:none;color:var(--muted);
+  border-radius:9px;font-size:0.88rem;font-weight:500;white-space:nowrap;overflow:hidden;text-align:left;
+}
+.sidebar-nav button .ic{font-size:1rem;flex-shrink:0;width:18px;text-align:center;}
+.sidebar-nav button:hover{color:var(--white);background:#1c1c1c;}
+.sidebar-nav button.active{color:var(--black);background:var(--white);}
+.sidebar-user{padding:14px;border-top:1px solid var(--card-border);}
+.sidebar-user-inner{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--orange);color:var(--black);font-weight:700;
+  display:flex;align-items:center;justify-content:center;font-size:0.85rem;flex-shrink:0;}
+.sidebar-user-info{overflow:hidden;flex:1;}
+.sidebar-user-info .n{font-size:0.85rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sidebar-user-info .e{font-size:0.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.logout-btn{background:none;border:none;color:var(--muted);font-size:1rem;flex-shrink:0;}
+.logout-btn:hover{color:var(--red);}
+
+.main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
+.topbar{
+  position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:16px;
+  padding:16px 28px;border-bottom:1px solid var(--card-border);background:rgba(11,11,11,.92);backdrop-filter:blur(8px);
+  flex-wrap:wrap;
+}
+.topbar h1{font-size:1.25rem;font-weight:600;}
+.topbar-right{display:flex;align-items:center;gap:14px;flex-wrap:wrap;}
+.clock{font-family:var(--mono);font-size:0.8rem;color:var(--muted);}
+.mode-toggle{display:flex;border:1px solid var(--card-border);border-radius:999px;padding:3px;background:var(--card);}
+.mode-toggle button{padding:7px 13px;border:none;background:none;color:var(--muted);border-radius:999px;font-size:0.75rem;font-weight:600;font-family:var(--mono);}
+.mode-toggle button.active.real{background:rgba(40,209,124,.15);color:var(--green);}
+.mode-toggle button.active.demo{background:rgba(255,214,0,.15);color:var(--yellow);}
+.bell-wrap{position:relative;}
+.bell{background:var(--card);border:1px solid var(--card-border);border-radius:10px;width:38px;height:38px;font-size:1rem;position:relative;}
+.bell-badge{position:absolute;top:-5px;right:-5px;background:var(--red);color:#fff;font-size:0.65rem;font-weight:700;
+  border-radius:999px;min-width:17px;height:17px;display:flex;align-items:center;justify-content:center;padding:0 4px;}
+.bell-dropdown{
+  position:absolute;right:0;top:46px;width:320px;background:var(--card);border:1px solid var(--card-border);
+  border-radius:14px;box-shadow:0 12px 30px rgba(0,0,0,.5);display:none;max-height:380px;overflow:auto;z-index:60;
+}
+.bell-dropdown.open{display:block;}
+.bell-dropdown-head{padding:14px 16px;border-bottom:1px solid var(--card-border);display:flex;justify-content:space-between;align-items:center;font-size:0.85rem;font-weight:600;}
+.bell-dropdown-head button{font-size:0.72rem;color:var(--orange);background:none;border:none;font-weight:600;}
+.notif-item{padding:12px 16px;border-bottom:1px solid var(--card-border);font-size:0.8rem;}
+.notif-item:last-child{border-bottom:none;}
+.notif-item .t{color:var(--muted);font-size:0.7rem;margin-top:3px;}
+.notif-empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:0.82rem;}
+
+main.content{padding:28px;max-width:1100px;width:100%;margin:0 auto;}
+.view{display:none;animation:fade .25s ease;}
+.view.active{display:block;}
+@keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:translateY(0);}}
+
+.section-head{display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:14px;margin-bottom:24px;}
+.section-head p{color:var(--muted);font-size:0.88rem;margin-top:4px;}
+
+.empty-state{border:1px dashed var(--card-border);border-radius:16px;padding:60px 24px;text-align:center;color:var(--muted);}
+.empty-state .icon{font-size:2.1rem;margin-bottom:14px;}
+.empty-state h3{color:var(--white);font-size:1.15rem;}
+.empty-state p{margin:8px 0 20px;font-size:0.9rem;}
+
+.outlet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;}
+.outlet-card{border:1px solid var(--card-border);background:var(--card);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;transition:.15s;}
+.outlet-card:hover{border-color:#333;}
+.outlet-card .top{display:flex;justify-content:space-between;align-items:flex-start;}
+.outlet-card .name{font-weight:600;font-size:1rem;}
+.outlet-card .id{font-family:var(--mono);color:var(--muted);font-size:0.72rem;margin-top:2px;}
+.outlet-card .temp{font-size:1.9rem;font-weight:700;font-family:var(--mono);}
+.outlet-card .temp small{font-size:0.95rem;color:var(--muted);font-weight:500;}
+.outlet-card .meta{font-size:0.75rem;color:var(--muted);}
+.outlet-card .actions{display:flex;gap:8px;margin-top:2px;}
+.add-card{border:1px dashed var(--card-border);border-radius:16px;padding:20px;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:8px;color:var(--muted);min-height:170px;background:transparent;}
+.add-card:hover{border-color:var(--orange);color:var(--orange);}
+.add-card .plus{font-size:1.7rem;}
+
+.back-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);font-size:0.86rem;margin-bottom:20px;}
+.back-link:hover{color:var(--white);}
+.detail-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:18px;}
+@media (max-width:860px){.detail-grid{grid-template-columns:1fr;}}
+.panel{border:1px solid var(--card-border);background:var(--card);border-radius:16px;padding:24px;}
+.panel + .panel{margin-top:16px;}
+.temp-hero .value{font-family:var(--mono);font-size:3.6rem;font-weight:700;line-height:1;margin:12px 0 10px;}
+.temp-hero .value small{font-size:1.4rem;color:var(--muted);font-weight:500;}
+.stat-row{display:flex;gap:22px;margin-top:16px;flex-wrap:wrap;}
+.stat{font-size:0.78rem;color:var(--muted);}
+.stat b{display:block;color:var(--white);font-family:var(--mono);font-size:0.92rem;margin-top:2px;}
+canvas{width:100%;height:170px;display:block;}
+.kv{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+.kv div{font-size:0.84rem;}
+.kv label{display:block;color:var(--muted);font-size:0.7rem;margin-bottom:3px;font-family:var(--mono);}
+.alert-item{display:flex;gap:12px;padding:11px 0;border-top:1px solid var(--card-border);font-size:0.83rem;}
+.alert-item:first-child{border-top:none;}
+.alert-item .dot{width:8px;height:8px;border-radius:50%;margin-top:6px;flex-shrink:0;}
+
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);display:none;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto;z-index:100;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--card);border:1px solid var(--card-border);border-radius:18px;max-width:560px;width:100%;padding:30px;}
+.modal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+.modal-head button{background:none;border:none;color:var(--muted);font-size:1.3rem;}
+.modal p.sub{color:var(--muted);font-size:0.84rem;margin-bottom:20px;}
+.fieldset-title{font-size:0.75rem;color:var(--orange);font-family:var(--mono);margin:20px 0 10px;text-transform:uppercase;letter-spacing:.04em;}
+.modal-actions{display:flex;gap:10px;margin-top:22px;}
+
+.audit-header{display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;}
+.audit-block{margin-top:20px;}
+.audit-block h4{font-size:0.75rem;color:var(--orange);font-family:var(--mono);text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px;}
+.audit-block p{color:#dcdcdc;font-size:0.9rem;line-height:1.65;}
+.audit-list{list-style:none;margin-top:6px;}
+.audit-list li{padding:5px 0;font-size:0.88rem;color:#dcdcdc;padding-left:18px;position:relative;}
+.audit-list li::before{content:'—';position:absolute;left:0;color:var(--muted);}
+.disclaimer{border:1px solid var(--card-border);border-radius:12px;padding:15px 17px;margin-top:24px;font-size:0.78rem;color:var(--muted);background:rgba(255,255,255,.02);}
+
+.audit-select-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px;margin-bottom:8px;}
+.audit-select-card{border:1px solid var(--card-border);background:var(--card);border-radius:14px;padding:18px;cursor:pointer;transition:.15s;}
+.audit-select-card:hover{border-color:var(--orange);}
+.audit-select-card .name{font-weight:600;font-size:0.92rem;}
+.audit-select-card .id{font-family:var(--mono);color:var(--muted);font-size:0.7rem;margin-top:2px;}
+.audit-select-card .temp{font-family:var(--mono);font-size:1.3rem;margin-top:10px;}
+
+.connect-card{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:18px;padding:22px;}
+.connect-status{display:flex;align-items:center;gap:9px;font-weight:600;font-size:0.9rem;}
+.connect-status .dot{width:9px;height:9px;border-radius:50%;}
+.payload-block{background:#0f0f0f;border:1px solid var(--card-border);border-radius:12px;padding:17px 19px;font-family:var(--mono);font-size:0.8rem;color:#cfcfcf;overflow-x:auto;white-space:pre;}
+.arch-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px;font-family:var(--mono);font-size:0.8rem;}
+.arch-row span.node{border:1px solid var(--card-border);border-radius:8px;padding:7px 12px;background:#0f0f0f;}
+.arch-row span.arrow{color:var(--muted);}
+
+.settings-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+@media (max-width:700px){.settings-grid{grid-template-columns:repeat(2,1fr);}}
+.token-box{display:flex;align-items:center;gap:10px;background:#0f0f0f;border:1px solid var(--card-border);border-radius:10px;padding:12px 15px;font-family:var(--mono);font-size:0.85rem;overflow-x:auto;}
+.token-box code{flex:1;white-space:nowrap;color:var(--yellow);}
+
+.profile-head{display:flex;align-items:center;gap:16px;margin-bottom:26px;}
+.profile-head .avatar{width:56px;height:56px;font-size:1.3rem;}
+.profile-head .n{font-size:1.2rem;font-weight:600;}
+.profile-head .e{color:var(--muted);font-size:0.85rem;}
+
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(20px);background:var(--white);color:var(--black);
+  padding:12px 20px;border-radius:10px;font-size:0.86rem;font-weight:600;opacity:0;transition:.25s;z-index:200;pointer-events:none;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+@media (max-width:760px){
+  .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:80;transform:translateX(-100%);transition:transform .2s;}
+  .sidebar.mobile-open{transform:translateX(0);}
+  .main-col{width:100%;}
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================= AUTH SCREEN ============================================================= -->
+<div id="authScreen">
+  <div class="auth-box">
+    <div class="auth-logo"><span class="dot"></span> SafeWire</div>
+    <div class="auth-tag">Temperatura monitorada. Risco identificado.</div>
+
+    <div class="auth-tabs">
+      <button id="tabLoginBtn" class="active" onclick="switchAuthTab('login')">Entrar</button>
+      <button id="tabSignupBtn" onclick="switchAuthTab('signup')">Criar conta</button>
+    </div>
+
+    <div class="form-error" id="authError"></div>
+
+    <!-- LOGIN -->
+    <div class="auth-panel active" id="panelLogin">
+      <div class="field"><label>E-mail</label><input type="email" id="login_email" placeholder="voce@email.com"></div>
+      <div class="field"><label>Senha</label><input type="password" id="login_password" placeholder="••••••••"></div>
+      <button class="btn primary full" onclick="doLogin()">Entrar</button>
+      <div class="demo-hint">Conta de demonstração para a banca: <b>demo@safewire.com</b> / senha <b>123456</b></div>
+    </div>
+
+    <!-- SIGNUP -->
+    <div class="auth-panel" id="panelSignup">
+      <div class="field"><label>Nome completo</label><input type="text" id="su_name" placeholder="Seu nome"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="su_email" placeholder="voce@email.com"></div>
+      <div class="field-row">
+        <div class="field"><label>Senha</label><input type="password" id="su_password"></div>
+        <div class="field"><label>Confirmar senha</label><input type="password" id="su_password2"></div>
+      </div>
+      <div class="field">
+        <label>Tipo de imóvel</label>
+        <select id="su_property">
+          <option>Residencial - Casa</option>
+          <option>Residencial - Apartamento</option>
+          <option>Comercial</option>
+          <option>Industrial</option>
+        </select>
+      </div>
+      <div class="field"><label>Idade aproximada da instalação elétrica principal</label><input type="text" id="su_age" placeholder="Ex.: 10 anos"></div>
+      <button class="btn primary full" onclick="doSignup()">Criar conta</button>
+    </div>
+
+    <div class="form-hint">Os dados são armazenados apenas neste navegador (localStorage), para fins de demonstração do projeto.</div>
+  </div>
+</div>
+
+<!-- ============================================================= APP SCREEN ============================================================= -->
+<div id="appScreen">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-top">
+      <div class="sidebar-logo"><span class="dot" id="sidebarDot"></span><span id="sidebarLogoText">SafeWire</span></div>
+      <button class="collapse-btn" onclick="toggleSidebar()">☰</button>
+    </div>
+    <nav class="sidebar-nav" id="sidebarNav">
+      <button data-view="tomadas" onclick="showView('tomadas')"><span class="ic">🔌</span><span class="lbl">Minhas Tomadas</span></button>
+      <button data-view="auditoria" onclick="showView('auditoria')"><span class="ic">📋</span><span class="lbl">Auditoria Técnica</span></button>
+      <button data-view="conectar" onclick="showView('conectar')"><span class="ic">📡</span><span class="lbl">Conectar Dispositivo</span></button>
+      <button data-view="configuracoes" onclick="showView('configuracoes')"><span class="ic">⚙️</span><span class="lbl">Configurações</span></button>
+      <button data-view="perfil" onclick="showView('perfil')"><span class="ic">👤</span><span class="lbl">Meu Perfil</span></button>
+    </nav>
+    <div class="sidebar-user">
+      <div class="sidebar-user-inner">
+        <div class="avatar" id="sidebarAvatar">--</div>
+        <div class="sidebar-user-info"><div class="n" id="sidebarName">—</div><div class="e" id="sidebarEmail">—</div></div>
+        <button class="logout-btn" title="Sair" onclick="doLogout()">⏻</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-col">
+    <div class="topbar">
+      <h1 id="pageTitle">Minhas Tomadas</h1>
+      <div class="topbar-right">
+        <div class="clock" id="clock">--:--:--</div>
+        <span class="badge offline" id="wsStatusBadge" title="Status da conexão com o servidor SafeWire (Socket.io)">⚪ Servidor: conectando…</span>
+        <div class="mode-toggle">
+          <button id="modeRealBtn" onclick="setMode('real')">🟢 REAL</button>
+          <button id="modeDemoBtn" onclick="setMode('demo')">🟡 DEMO</button>
+        </div>
+        <div class="bell-wrap">
+          <button class="bell" onclick="toggleBell()">🔔<span class="bell-badge" id="bellBadge" style="display:none;">0</span></button>
+          <div class="bell-dropdown" id="bellDropdown">
+            <div class="bell-dropdown-head"><span>Notificações</span><button onclick="markAllRead()">Marcar como lidas</button></div>
+            <div id="bellList"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <main class="content">
+
+      <!-- MINHAS TOMADAS -->
+      <section id="view-tomadas" class="view active">
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Painel de tomadas</h2><p>Cada card representa um ponto elétrico monitorado individualmente.</p></div></div>
+        <div id="outletsContainer"></div>
+      </section>
+
+      <!-- DETALHE -->
+      <section id="view-detalhe" class="view">
+        <a class="back-link" onclick="showView('tomadas')">&larr; Minhas tomadas</a>
+        <div id="detalheContainer"></div>
+      </section>
+
+      <!-- AUDITORIA (lista) -->
+      <section id="view-auditoria" class="view">
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Auditoria técnica</h2><p>Selecione uma tomada para gerar o relatório de auditoria orientativa.</p></div></div>
+        <div id="auditListContainer"></div>
+      </section>
+
+      <!-- AUDITORIA (relatório) -->
+      <section id="view-auditoria-detalhe" class="view">
+        <a class="back-link" onclick="showView('auditoria')">&larr; Auditoria técnica</a>
+        <div id="auditoriaContainer"></div>
+      </section>
+
+      <!-- CONECTAR DISPOSITIVO -->
+      <section id="view-conectar" class="view">
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Conectar dispositivo</h2><p>Status da comunicação entre o protótipo (sensor → Arduino → ESP) e o SafeWire.</p></div></div>
+        <div id="connectContainer"></div>
+        <div class="panel" style="margin-top:16px;">
+          <h3 style="margin-bottom:6px;font-size:1rem;">Arquitetura do protótipo</h3>
+          <p style="color:var(--muted);font-size:0.84rem;">Sensor de temperatura à prova d'água (DS18B20) · Arduino · ESP8266/ESP32 · jumpers & protoboard · conversor de nível lógico · resistor 4,7 kΩ.</p>
+          <div class="arch-row">
+            <span class="node">Sensor</span><span class="arrow">→</span>
+            <span class="node">Arduino</span><span class="arrow">→</span>
+            <span class="node">ESP8266/ESP32</span><span class="arrow">→</span>
+            <span class="node">Servidor</span><span class="arrow">→</span>
+            <span class="node">SafeWire</span>
+          </div>
+        </div>
+        <div class="panel">
+          <h3 style="margin-bottom:10px;font-size:1rem;">Payload enviado pelo ESP</h3>
+          <div class="payload-block" id="payloadExample"></div>
+          <p style="color:var(--muted);font-size:0.76rem;margin-top:12px;">O <code>user_token</code> autentica a conta de destino; o <code>device_id</code> identifica a tomada. Sem comunicação do ESP, nenhuma temperatura é exibida como real.</p>
+        </div>
+      </section>
+
+      <!-- CONFIGURAÇÕES -->
+      <section id="view-configuracoes" class="view">
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Configurações</h2><p>Ajuste os limites térmicos e os dados de integração da sua conta.</p></div></div>
+
+        <div class="panel">
+          <h3 style="margin-bottom:4px;font-size:1rem;">Limites de temperatura</h3>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:16px;">Valores de referência configuráveis — ajuste conforme os critérios técnicos definidos para o seu projeto.</p>
+          <div class="settings-grid">
+            <div class="field"><label>🟢 Normal até (°C)</label><input type="number" step="0.1" id="lim_normal"></div>
+            <div class="field"><label>🟡 Atenção até (°C)</label><input type="number" step="0.1" id="lim_attention"></div>
+            <div class="field"><label>🟠 Elevada até (°C)</label><input type="number" step="0.1" id="lim_elevated"></div>
+            <div class="field"><label>🔴 Acima disso: crítico</label><input type="text" value="Automático" disabled></div>
+          </div>
+          <button class="btn primary" onclick="saveLimits()">Salvar limites</button>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin-bottom:4px;font-size:1rem;">Token de integração IoT</h3>
+          <p style="color:var(--muted);font-size:0.8rem;margin-bottom:14px;">Use este token no firmware do ESP para autenticar o envio de dados para a sua conta.</p>
+          <div class="token-box"><code id="apiTokenDisplay">sw_live_...</code><button class="btn small" onclick="copyToken()">Copiar</button></div>
+          <div style="height:10px;"></div>
+          <button class="btn small ghost" onclick="regenToken()">Gerar novo token</button>
+        </div>
+
+        <div class="panel">
+          <h3 style="margin-bottom:16px;font-size:1rem;">Perfil e senha</h3>
+          <div class="field"><label>Nome completo</label><input type="text" id="cfg_name"></div>
+          <div class="field"><label>E-mail</label><input type="email" id="cfg_email"></div>
+          <div class="fieldset-title">Alterar senha (opcional)</div>
+          <div class="field-row">
+            <div class="field"><label>Senha atual</label><input type="password" id="cfg_curpass"></div>
+            <div class="field"><label>Nova senha</label><input type="password" id="cfg_newpass"></div>
+          </div>
+          <button class="btn primary" onclick="saveProfile()">Salvar alterações</button>
+        </div>
+      </section>
+
+      <!-- MEU PERFIL -->
+      <section id="view-perfil" class="view">
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Meu perfil</h2></div></div>
+        <div class="panel">
+          <div class="profile-head">
+            <div class="avatar" id="profileAvatar">--</div>
+            <div><div class="n" id="profileName">—</div><div class="e" id="profileEmail">—</div></div>
+          </div>
+          <div class="kv">
+            <div><label>Tipo de imóvel</label><span id="profileProperty">—</span></div>
+            <div><label>Idade aproximada da instalação</label><span id="profileAge">—</span></div>
+            <div><label>Tomadas cadastradas</label><span id="profileOutletCount">—</span></div>
+            <div><label>Token de integração</label><span id="profileToken" style="font-family:var(--mono);font-size:0.78rem;">—</span></div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+</div>
+
+<!-- MODAL: ADICIONAR TOMADA -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-head"><h3>Adicionar tomada</h3><button onclick="closeModal('addModal')">&times;</button></div>
+    <p class="sub">Identifique o ponto elétrico que será monitorado pelo sensor.</p>
+    <div class="fieldset-title">Identificação da tomada</div>
+    <div class="field"><label>Nome da tomada</label><input type="text" id="f_name" placeholder="Ex.: Tomada da sala"></div>
+    <div class="field-row">
+      <div class="field"><label>ID do dispositivo</label><input type="text" id="f_id" placeholder="Ex.: SW-001"></div>
+      <div class="field"><label>Localização (auxiliar)</label><input type="text" id="f_location" placeholder="Ex.: Sala"></div>
+    </div>
+    <div class="fieldset-title">Dados da instalação</div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de condutor</label>
+        <select id="f_conductor"><option>Não informado</option><option>Cobre</option><option>Alumínio</option></select>
+      </div>
+      <div class="field"><label>Bitola do fio</label>
+        <select id="f_gauge"><option>Não informado</option><option>1,5 mm²</option><option>2,5 mm²</option><option>4 mm²</option><option>6 mm²</option><option>10 mm²</option><option>Outro</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Fabricante/marca do fio</label><input type="text" id="f_manufacturer" placeholder="Opcional"></div>
+      <div class="field"><label>Idade aproximada do ponto</label><input type="text" id="f_age" placeholder="Opcional"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de instalação</label><input type="text" id="f_installtype" placeholder="Embutida, aparente, canaleta..."></div>
+      <div class="field"><label>Equipamento normalmente conectado</label><input type="text" id="f_equipment" placeholder="Ex.: Computador"></div>
+    </div>
+    <div class="field"><label>Observações técnicas</label><textarea id="f_notes" rows="2"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn ghost" onclick="closeModal('addModal')">Cancelar</button>
+      <button class="btn primary full" onclick="saveOutlet()">Adicionar tomada</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* =========================================================================
+   SAFEWIRE — persistência local (simula backend por usuário)
+   ========================================================================= */
+const DB_KEY = 'safewire_db_v1';
+const SESSION_KEY = 'safewire_session_v1';
+
+function loadDB(){
+  try{ const raw = localStorage.getItem(DB_KEY); return raw? JSON.parse(raw) : {users:{}}; }
+  catch(e){ return {users:{}}; }
+}
+function saveDB(){ localStorage.setItem(DB_KEY, JSON.stringify(DB)); }
+
+function defaultLimits(){ return {normal:45, attention:60, elevated:75}; }
+function genToken(){ return 'sw_live_' + Math.random().toString(36).slice(2,10) + Math.random().toString(36).slice(2,8); }
+
+function newUser(name, email, password, property, age){
+  return {
+    name, email, password, property, age,
+    outlets: [],
+    settings: { limits: defaultLimits(), apiToken: genToken() },
+  };
+}
+
+function seedDemoUser(){
+  if(DB.users['demo@safewire.com']) return;
+  const u = newUser('Conta Demonstração', 'demo@safewire.com', '123456', 'Residencial - Casa', '12 anos');
+
+  function outlet(id, name, devId, loc, conductor, gauge, manufacturer, age, equipment, seedTemp){
+    const o = {
+      id, name, deviceId:devId, location:loc, connected:true, temp:null, history:[], lastReading:null, alerts:[],
+      installation:{conductor, gauge, manufacturer, age, installType:'Embutida', equipment, notes:''},
+    };
+    // histórico simulado das últimas leituras
+    let t = seedTemp;
+    const now = Date.now();
+    for(let i=9;i>=0;i--){
+      t += (Math.random()*4 - 1.5);
+      const time = new Date(now - i*10*60000);
+      o.history.push({t, label:time.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})});
+    }
+    o.temp = o.history[o.history.length-1].t;
+    o.lastReading = o.history[o.history.length-1].label;
+    return o;
+  }
+
+  u.outlets.push(outlet('d1','Tomada da Sala','SW-001','Sala','Cobre','2,5 mm²','Não informado','8 anos','Televisão', 40));
+  u.outlets.push(outlet('d2','Tomada da Cozinha','SW-002','Cozinha','Alumínio','1,5 mm²','Não informado','15 anos','Micro-ondas', 63));
+  u.outlets.push(outlet('d3','Tomada do Quarto','SW-003','Quarto','Cobre','1,5 mm²','Não informado','5 anos','Ar-condicionado', 30));
+
+  // gera um alerta de exemplo na tomada da cozinha (elevada)
+  u.outlets[1].alerts.push({level:'elevated', text:'A temperatura registrada está acima da faixa configurada.', time:u.outlets[1].lastReading, read:false});
+
+  DB.users[u.email] = u;
+  saveDB();
+}
+
+let DB = loadDB();
+seedDemoUser();
+
+let session = localStorage.getItem(SESSION_KEY);
+let currentUser = null;
+let currentMode = 'real'; // 'real' | 'demo'
+let demoInterval = null;
+let currentOutletId = null;
+let idCounter = Date.now();
+function uid(){ return 'o' + (idCounter++); }
+
+function toast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 2200);
+}
+function esc(s){ return (s||'').toString().replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function initials(name){ return (name||'?').trim().split(/\s+/).slice(0,2).map(w=>w[0]?.toUpperCase()||'').join(''); }
+
+/* =========================================================================
+   AUTENTICAÇÃO
+   ========================================================================= */
+function switchAuthTab(tab){
+  document.getElementById('tabLoginBtn').classList.toggle('active', tab==='login');
+  document.getElementById('tabSignupBtn').classList.toggle('active', tab==='signup');
+  document.getElementById('panelLogin').classList.toggle('active', tab==='login');
+  document.getElementById('panelSignup').classList.toggle('active', tab==='signup');
+  hideAuthError();
+}
+function showAuthError(msg){ const e = document.getElementById('authError'); e.textContent = msg; e.classList.add('show'); }
+function hideAuthError(){ document.getElementById('authError').classList.remove('show'); }
+
+function doLogin(){
+  hideAuthError();
+  const email = document.getElementById('login_email').value.trim().toLowerCase();
+  const pass = document.getElementById('login_password').value;
+  if(!email || !pass){ showAuthError('Preencha e-mail e senha.'); return; }
+  const u = DB.users[email];
+  if(!u){ showAuthError('E-mail não cadastrado.'); return; }
+  if(u.password !== pass){ showAuthError('Senha incorreta.'); return; }
+  session = email;
+  localStorage.setItem(SESSION_KEY, email);
+  enterApp();
+}
+
+function doSignup(){
+  hideAuthError();
+  const name = document.getElementById('su_name').value.trim();
+  const email = document.getElementById('su_email').value.trim().toLowerCase();
+  const pass = document.getElementById('su_password').value;
+  const pass2 = document.getElementById('su_password2').value;
+  const property = document.getElementById('su_property').value;
+  const age = document.getElementById('su_age').value.trim() || 'Não informado';
+
+  if(!name || !email || !pass || !pass2){ showAuthError('Preencha todos os campos obrigatórios.'); return; }
+  if(!email.includes('@')){ showAuthError('Informe um e-mail válido.'); return; }
+  if(pass.length < 4){ showAuthError('A senha deve ter ao menos 4 caracteres.'); return; }
+  if(pass !== pass2){ showAuthError('As senhas não coincidem.'); return; }
+  if(DB.users[email]){ showAuthError('Este e-mail já está cadastrado.'); return; }
+
+  DB.users[email] = newUser(name, email, pass, property, age);
+  saveDB();
+  session = email;
+  localStorage.setItem(SESSION_KEY, email);
+  toast('Conta criada com sucesso.');
+  enterApp();
+}
+
+function doLogout(){
+  session = null;
+  localStorage.removeItem(SESSION_KEY);
+  clearInterval(demoInterval);
+  document.getElementById('appScreen').classList.remove('active');
+  document.getElementById('authScreen').style.display = 'flex';
+  document.getElementById('login_password').value = '';
+}
+
+function enterApp(){
+  currentUser = DB.users[session];
+  document.getElementById('authScreen').style.display = 'none';
+  document.getElementById('appScreen').classList.add('active');
+
+  document.getElementById('sidebarAvatar').textContent = initials(currentUser.name);
+  document.getElementById('sidebarName').textContent = currentUser.name;
+  document.getElementById('sidebarEmail').textContent = currentUser.email;
+
+  document.getElementById('payloadExample').textContent =
+`{
+  "user_token": "${currentUser.settings.apiToken}",
+  "device_id": "SW-001",
+  "temperature": 72.4,
+  "timestamp": ${Date.now()}
+}`;
+
+  currentMode = 'real';
+  setMode(currentMode, true);
+  showView('tomadas');
+  renderOutlets();
+}
+
+// auto-login se já houver sessão salva
+if(session && DB.users[session]){ enterApp(); }
+
+/* =========================================================================
+   NAVEGAÇÃO
+   ========================================================================= */
+const pageTitles = {
+  tomadas:'Minhas Tomadas', detalhe:'Detalhe da tomada', auditoria:'Auditoria Técnica',
+  'auditoria-detalhe':'Relatório de auditoria', conectar:'Conectar Dispositivo',
+  configuracoes:'Configurações', perfil:'Meu Perfil'
+};
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.getElementById('view-'+name).classList.add('active');
+  document.querySelectorAll('.sidebar-nav button').forEach(b=>b.classList.toggle('active', b.dataset.view===name));
+  document.getElementById('pageTitle').textContent = pageTitles[name] || 'SafeWire';
+  if(name==='tomadas') renderOutlets();
+  if(name==='auditoria') renderAuditList();
+  if(name==='conectar') renderConnect();
+  if(name==='configuracoes') renderConfig();
+  if(name==='perfil') renderPerfil();
+  window.scrollTo({top:0,behavior:'instant'});
+  document.getElementById('sidebar').classList.remove('mobile-open');
+}
+function toggleSidebar(){ document.getElementById('sidebar').classList.toggle('collapsed'); }
+
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+/* =========================================================================
+   RELÓGIO
+   ========================================================================= */
+setInterval(()=>{
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleDateString('pt-BR') + '  ' + now.toLocaleTimeString('pt-BR');
+}, 1000);
+
+/* =========================================================================
+   MODO REAL / DEMONSTRAÇÃO
+   ========================================================================= */
+function setMode(mode, silent){
+  currentMode = mode;
+  document.getElementById('modeRealBtn').classList.toggle('active', mode==='real');
+  document.getElementById('modeRealBtn').classList.toggle('real', mode==='real');
+  document.getElementById('modeDemoBtn').classList.toggle('active', mode==='demo');
+  document.getElementById('modeDemoBtn').classList.toggle('demo', mode==='demo');
+  document.getElementById('sidebarDot').classList.toggle('demo', mode==='demo');
+
+  clearInterval(demoInterval);
+  if(mode==='demo'){
+    let base = {};
+    currentUser.outlets.forEach(o=> base[o.id] = o.temp || (30 + Math.random()*20));
+    demoInterval = setInterval(()=>{
+      currentUser.outlets.forEach(o=>{
+        base[o.id] = (base[o.id]||40) + (Math.random()*6 - 1.5);
+        base[o.id] = Math.max(25, Math.min(base[o.id], 95));
+        applyReading(o, base[o.id], true);
+      });
+      saveDB();
+    }, 2500);
+    if(!silent) toast('Modo demonstração ativado — dados simulados.');
+  } else {
+    if(!silent) toast('Modo monitoramento real ativado — aguardando dados do protótipo.');
+  }
+  renderOutlets();
+  if(document.getElementById('view-conectar').classList.contains('active')) renderConnect();
+}
+
+/* =========================================================================
+   STATUS
+   ========================================================================= */
+function statusFor(temp){
+  const L = currentUser.settings.limits;
+  if(temp===null || temp===undefined) return {key:'offline', label:'Offline'};
+  if(temp <= L.normal) return {key:'normal', label:'Normal', emoji:'🟢'};
+  if(temp <= L.attention) return {key:'attention', label:'Atenção', emoji:'🟡'};
+  if(temp <= L.elevated) return {key:'elevated', label:'Temperatura elevada', emoji:'🟠'};
+  return {key:'critical', label:'Alerta de risco', emoji:'🔴'};
+}
+
+/* =========================================================================
+   CADASTRO / TOMADAS
+   ========================================================================= */
+function saveOutlet(){
+  const name = document.getElementById('f_name').value.trim();
+  const devId = document.getElementById('f_id').value.trim();
+  if(!name || !devId){ toast('Preencha nome e ID do dispositivo.'); return; }
+  const outlet = {
+    id: uid(), name, deviceId:devId, location:document.getElementById('f_location').value.trim(),
+    connected:false, temp:null, history:[], lastReading:null, alerts:[],
+    installation:{
+      conductor: document.getElementById('f_conductor').value,
+      gauge: document.getElementById('f_gauge').value,
+      manufacturer: document.getElementById('f_manufacturer').value.trim() || 'Não informado',
+      age: document.getElementById('f_age').value.trim() || 'Não informado',
+      installType: document.getElementById('f_installtype').value.trim() || 'Não informado',
+      equipment: document.getElementById('f_equipment').value.trim() || 'Não informado',
+      notes: document.getElementById('f_notes').value.trim(),
+    },
+  };
+  currentUser.outlets.push(outlet);
+  saveDB();
+  closeModal('addModal');
+  ['f_name','f_id','f_location','f_manufacturer','f_age','f_installtype','f_equipment','f_notes'].forEach(id=>document.getElementById(id).value='');
+  toast('Tomada adicionada.');
+  renderOutlets();
+  if(currentMode==='demo') setMode('demo', true);
+}
+
+function renderOutlets(){
+  const c = document.getElementById('outletsContainer');
+  const outlets = currentUser.outlets;
+  if(outlets.length===0){
+    c.innerHTML = `<div class="empty-state"><div class="icon">🔌</div><h3>Nenhuma tomada monitorada</h3><p>Adicione uma tomada para começar o monitoramento.</p><button class="btn primary" onclick="openModal('addModal')">+ Adicionar tomada</button></div>`;
+    return;
+  }
+  let html = '<div class="outlet-grid">';
+  outlets.forEach(o=>{
+    const st = statusFor(o.temp);
+    html += `
+      <div class="outlet-card">
+        <div class="top">
+          <div><div class="name">${esc(o.name)}</div><div class="id">${esc(o.deviceId)}</div></div>
+          <span class="badge ${st.key}">${st.emoji||''} ${st.label}</span>
+        </div>
+        <div class="temp">${o.temp!==null? o.temp.toFixed(1)+'<small> °C</small>':'—'}</div>
+        <div class="meta">${o.lastReading? 'Última leitura: '+o.lastReading : 'Aguardando comunicação com o dispositivo'}${o.location? ' · '+esc(o.location):''}</div>
+        <div class="actions">
+          <button class="btn small" onclick="openOutlet('${o.id}')">Monitorar</button>
+          <button class="btn small ghost" onclick="openAudit('${o.id}')">Auditoria</button>
+        </div>
+      </div>`;
+  });
+  html += `<button class="add-card" onclick="openModal('addModal')"><span class="plus">+</span> Adicionar tomada</button></div>`;
+  c.innerHTML = html;
+}
+
+function openOutlet(id){ currentOutletId=id; showView('detalhe'); renderDetail(); }
+
+function renderDetail(){
+  const o = currentUser.outlets.find(x=>x.id===currentOutletId);
+  const c = document.getElementById('detalheContainer');
+  if(!o){ c.innerHTML=''; return; }
+  const st = statusFor(o.temp), inst = o.installation;
+  c.innerHTML = `
+    <div class="detail-grid">
+      <div>
+        <div class="panel temp-hero">
+          <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:10px;">
+            <div><div style="color:var(--orange);font-family:var(--mono);font-size:0.78rem;">${esc(o.deviceId)}${o.location? ' · '+esc(o.location):''}</div>
+            <h2 style="margin-top:6px;font-size:1.3rem;">${esc(o.name)}</h2></div>
+            <span class="badge ${o.demoReading?'sim':(o.connected?'real':'offline')}">${o.demoReading?'🟡 MODO DEMONSTRAÇÃO':(o.connected?'🟢 MONITORAMENTO REAL':'🔴 DISPOSITIVO OFFLINE')}</span>
+          </div>
+          <div class="value">${o.temp!==null? o.temp.toFixed(1):'—'}<small> °C</small></div>
+          <span class="badge ${st.key}">${st.emoji||''} ${st.label}</span>
+          <div class="stat-row">
+            <div class="stat">Última leitura<b>${o.lastReading||'—'}</b></div>
+            <div class="stat">Máxima registrada<b>${o.history.length? Math.max(...o.history.map(h=>h.t)).toFixed(1)+' °C':'—'}</b></div>
+            <div class="stat">Mínima registrada<b>${o.history.length? Math.min(...o.history.map(h=>h.t)).toFixed(1)+' °C':'—'}</b></div>
+          </div>
+        </div>
+        <div class="panel"><h3 style="margin-bottom:10px;font-size:0.95rem;">Histórico de temperatura da tomada</h3><canvas id="chart_${o.id}"></canvas></div>
+        <div class="panel"><h3 style="margin-bottom:10px;font-size:0.95rem;">Log de alertas</h3><div id="alertsList">${renderAlerts(o)}</div></div>
+      </div>
+      <div>
+        <div class="panel">
+          <h3 style="margin-bottom:14px;font-size:0.95rem;">Dados da instalação</h3>
+          <div class="kv">
+            <div><label>Condutor</label>${esc(inst.conductor)}</div>
+            <div><label>Bitola</label>${esc(inst.gauge)}</div>
+            <div><label>Fabricante</label>${esc(inst.manufacturer)}</div>
+            <div><label>Idade aproximada</label>${esc(inst.age)}</div>
+            <div><label>Tipo de instalação</label>${esc(inst.installType)}</div>
+            <div><label>Equipamento conectado</label>${esc(inst.equipment)}</div>
+          </div>
+          ${inst.notes? `<div style="margin-top:14px;"><label style="color:var(--muted);font-size:0.7rem;font-family:var(--mono);">OBSERVAÇÕES</label><p style="font-size:0.84rem;margin-top:4px;color:#ddd;">${esc(inst.notes)}</p></div>`:''}
+        </div>
+        <div class="panel"><button class="btn primary full" onclick="openAudit('${o.id}')">Ver auditoria</button></div>
+      </div>
+    </div>`;
+  drawChart(o);
+}
+
+function renderAlerts(o){
+  if(o.alerts.length===0) return `<p style="color:var(--muted);font-size:0.84rem;">Nenhum alerta registrado.</p>`;
+  const colors = {attention:'var(--yellow)', elevated:'var(--orange)', critical:'var(--red)'};
+  return o.alerts.slice().reverse().map(a=>`
+    <div class="alert-item"><div class="dot" style="background:${colors[a.level]||'var(--muted)'}"></div>
+      <div><div>${esc(a.text)}</div><div class="t" style="color:var(--muted);font-size:0.73rem;margin-top:2px;">${esc(a.time)} · ${o.name}</div></div>
+    </div>`).join('');
+}
+
+/* =========================================================================
+   GRÁFICO CANVAS NATIVO
+   ========================================================================= */
+function drawChart(o){
+  const canvas = document.getElementById('chart_'+o.id);
+  if(!canvas) return;
+  const dpr = window.devicePixelRatio||1;
+  const rect = canvas.getBoundingClientRect();
+  canvas.width = rect.width*dpr; canvas.height = 170*dpr;
+  const ctx = canvas.getContext('2d'); ctx.scale(dpr,dpr);
+  const w = rect.width, h = 170;
+  ctx.clearRect(0,0,w,h);
+  if(o.history.length<2){ ctx.fillStyle='#555'; ctx.font='13px sans-serif'; ctx.fillText('Sem dados suficientes para exibir o histórico.',10,h/2); return; }
+  const L = currentUser.settings.limits;
+  const pad = {l:38,r:10,t:14,b:22};
+  const temps = o.history.map(p=>p.t);
+  const minT = Math.min(...temps, L.normal) - 5, maxT = Math.max(...temps, L.elevated) + 5;
+  const plotW = w-pad.l-pad.r, plotH = h-pad.t-pad.b;
+  const x = i => pad.l + (i/(o.history.length-1))*plotW;
+  const y = t => pad.t + plotH - ((t-minT)/(maxT-minT))*plotH;
+  ctx.strokeStyle='#242424'; ctx.lineWidth=1; ctx.fillStyle='#666'; ctx.font='10px monospace';
+  for(let i=0;i<=3;i++){ const gy=pad.t+(plotH/3)*i; ctx.beginPath(); ctx.moveTo(pad.l,gy); ctx.lineTo(w-pad.r,gy); ctx.stroke();
+    ctx.fillText((maxT-((maxT-minT)/3)*i).toFixed(0)+'°',2,gy+3); }
+  ctx.beginPath(); o.history.forEach((p,i)=>{ const px=x(i),py=y(p.t); i===0?ctx.moveTo(px,py):ctx.lineTo(px,py); });
+  ctx.strokeStyle='#FF8A00'; ctx.lineWidth=2.2; ctx.stroke();
+  ctx.lineTo(x(o.history.length-1),pad.t+plotH); ctx.lineTo(x(0),pad.t+plotH); ctx.closePath();
+  ctx.fillStyle='rgba(255,138,0,0.08)'; ctx.fill();
+  o.history.forEach((p,i)=>{ ctx.beginPath(); ctx.arc(x(i),y(p.t),2.3,0,Math.PI*2); ctx.fillStyle='#FF8A00'; ctx.fill(); });
+  ctx.fillStyle='#666'; ctx.font='10px monospace';
+  ctx.fillText(o.history[0].label,pad.l,h-5);
+  ctx.textAlign='right'; ctx.fillText(o.history[o.history.length-1].label,w-pad.r,h-5); ctx.textAlign='left';
+}
+
+/* =========================================================================
+   AUDITORIA
+   ========================================================================= */
+function renderAuditList(){
+  const c = document.getElementById('auditListContainer');
+  const outlets = currentUser.outlets;
+  if(outlets.length===0){ c.innerHTML = `<div class="empty-state"><div class="icon">📋</div><h3>Nenhuma tomada para auditar</h3><p>Cadastre uma tomada em "Minhas Tomadas" para gerar auditorias.</p></div>`; return; }
+  c.innerHTML = `<div class="audit-select-grid">` + outlets.map(o=>{
+    const st = statusFor(o.temp);
+    return `<div class="audit-select-card" onclick="openAudit('${o.id}')">
+      <div class="name">${esc(o.name)}</div><div class="id">${esc(o.deviceId)}</div>
+      <div class="temp">${o.temp!==null? o.temp.toFixed(1)+' °C':'—'}</div>
+      <div style="margin-top:8px;"><span class="badge ${st.key}">${st.emoji||''} ${st.label}</span></div>
+    </div>`;
+  }).join('') + `</div>`;
+}
+
+function openAudit(id){ currentOutletId=id; showView('auditoria-detalhe'); renderAudit(); }
+
+function auditNarrative(st){
+  switch(st.key){
+    case 'normal': return "A temperatura registrada na tomada está dentro da faixa considerada normal para o período monitorado. Isso é um bom indicativo, mas não substitui inspeções periódicas da instalação.";
+    case 'attention': return "A tomada apresentou um leve aumento de temperatura durante o período monitorado. Essa condição, por si só, não indica falha, mas justifica acompanhamento mais próximo das próximas leituras.";
+    case 'elevated': return "A tomada apresentou uma temperatura elevada durante o período monitorado. Essa condição merece investigação da instalação elétrica e avaliação por profissional qualificado.";
+    case 'critical': return "A tomada apresentou uma temperatura significativamente acima da faixa configurada como segura. Recomenda-se atenção prioritária e avaliação da instalação elétrica por profissional qualificado o quanto antes.";
+    default: return "Ainda não há leituras suficientes desta tomada para gerar uma análise.";
+  }
+}
+
+function renderAudit(){
+  const o = currentUser.outlets.find(x=>x.id===currentOutletId);
+  const c = document.getElementById('auditoriaContainer');
+  if(!o){ c.innerHTML=''; return; }
+  const st = statusFor(o.temp), inst = o.installation;
+  c.innerHTML = `
+    <div class="panel">
+      <div class="audit-header">
+        <div><div style="color:var(--orange);font-family:var(--mono);font-size:0.78rem;">RELATÓRIO DE AUDITORIA SAFEWIRE</div>
+        <h2 style="margin-top:6px;font-size:1.25rem;">${esc(o.name)}</h2>
+        <div style="color:var(--muted);font-size:0.84rem;margin-top:2px;">ID: ${esc(o.deviceId)}</div></div>
+        <span class="badge ${st.key}" style="font-size:0.82rem;padding:8px 14px;">${st.emoji||''} ${st.label.toUpperCase()}</span>
+      </div>
+      <div class="audit-block"><h4>Temperatura registrada</h4><p style="font-size:1.5rem;font-family:var(--mono);font-weight:700;">${o.temp!==null? o.temp.toFixed(1)+' °C':'Sem leitura disponível'}</p></div>
+      <div class="audit-block"><h4>Análise orientativa do ponto elétrico</h4><p>${auditNarrative(st)}</p></div>
+      <div class="audit-block"><h4>Ficha técnica da instalação</h4>
+        <div class="kv">
+          <div><label>Condutor</label>${esc(inst.conductor)}</div>
+          <div><label>Bitola</label>${esc(inst.gauge)}</div>
+          <div><label>Fabricante/marca do fio</label>${esc(inst.manufacturer)}</div>
+          <div><label>Idade aproximada</label>${esc(inst.age)}</div>
+          <div><label>Tipo de instalação</label>${esc(inst.installType)}</div>
+          <div><label>Carga conectada</label>${esc(inst.equipment)}</div>
+        </div>
+      </div>
+      <div class="audit-block"><h4>Orientação e checklist técnico recomendado</h4>
+        <ul class="audit-list">
+          <li>Verificação do estado físico da tomada e plugues</li>
+          <li>Inspeção do aperto dos bornes e conexões</li>
+          <li>Avaliação da adequação da bitola do condutor à carga conectada</li>
+          <li>Verificação de sinais de oxidação, ressecamento do isolamento ou aquecimento residual</li>
+          <li>Adequação do circuito e disjuntor de proteção</li>
+        </ul>
+      </div>
+      <div class="audit-block"><h4>Recomendação profissional</h4>
+        <p>Caso seja identificada qualquer inadequação ou permanência de temperatura elevada, um profissional qualificado (eletricista) deverá ser consultado para realizar a revisão ou substituição da fiação.</p>
+      </div>
+      <div class="audit-block"><h4>Objetivo institucional</h4>
+        <p><b>Reduzir riscos de aquecimento e contribuir para a prevenção de incêndios elétricos.</b></p>
+      </div>
+      <div class="disclaimer">O SafeWire é uma ferramenta orientativa e de monitoramento. Ele não realiza diagnóstico definitivo da instalação elétrica e não substitui a inspeção técnica presencial por um profissional habilitado.</div>
+    </div>`;
+}
+
+/* =========================================================================
+   CONECTAR DISPOSITIVO
+   ========================================================================= */
+function renderConnect(){
+  const c = document.getElementById('connectContainer');
+  const outlets = currentUser.outlets;
+  if(outlets.length===0){ c.innerHTML = `<div class="empty-state"><div class="icon">📡</div><h3>Nenhum dispositivo cadastrado</h3><p>Adicione uma tomada em "Minhas Tomadas" para configurar a conexão.</p></div>`; return; }
+  c.innerHTML = outlets.map(o=>`
+    <div class="panel connect-card">
+      <div><div style="color:var(--orange);font-family:var(--mono);font-size:0.75rem;">DISPOSITIVO</div>
+      <h3 style="margin-top:4px;font-size:1rem;">${esc(o.deviceId)} — ${esc(o.name)}</h3>
+      <div style="color:var(--muted);font-size:0.8rem;margin-top:8px;">Última comunicação: ${o.lastReading||'—'}<br>Última temperatura recebida: ${o.temp!==null? o.temp.toFixed(1)+' °C':'—'}</div></div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:10px;">
+        <div class="connect-status"><span class="dot" style="background:${o.connected?'var(--green)':'var(--red)'}"></span>${o.connected?'Conectado':'Desconectado'}</div>
+        <button class="btn small" onclick="testConnection('${o.id}')">Testar conexão</button>
+      </div>
+    </div>`).join('');
+}
+function testConnection(id){
+  if(currentMode==='demo') toast('Conexão simulada (modo demonstração) — nenhum hardware real conectado.');
+  else toast('Aguardando comunicação com o dispositivo. Nenhum dado real recebido ainda.');
+}
+
+/* Ponto de integração real: chame receiveESPData({user_token, device_id, temperature, timestamp}) */
+function receiveESPData(payload){
+  const user = Object.values(DB.users).find(u=>u.settings.apiToken===payload.user_token);
+  if(!user){ console.warn('Token inválido.'); return; }
+  const o = user.outlets.find(x=>x.deviceId===payload.device_id);
+  if(!o){ console.warn('Tomada não encontrada para device_id', payload.device_id); return; }
+  applyReading(o, payload.temperature, false, payload.timestamp);
+  saveDB();
+}
+
+function applyReading(o, temp, isDemo, ts){
+  const time = new Date(ts || Date.now());
+  const label = time.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  const prevStatus = statusFor(o.temp).key;
+  o.temp = temp; o.connected = true; o.demoReading = isDemo; o.lastReading = label;
+  o.history.push({t:temp, label}); if(o.history.length>30) o.history.shift();
+  const st = statusFor(temp);
+  if(st.key!=='normal' && st.key!==prevStatus){
+    const texts = {attention:'A temperatura da tomada apresentou aumento.', elevated:'A temperatura registrada está acima da faixa configurada.', critical:'A temperatura ultrapassou o limite crítico configurado.'};
+    o.alerts.push({level:st.key, text:texts[st.key], time:label, read:false});
+  }
+  refreshAfterReading(o);
+}
+function refreshAfterReading(o){
+  if(o.id===currentOutletId){
+    if(document.getElementById('view-detalhe').classList.contains('active')) renderDetail();
+    if(document.getElementById('view-auditoria-detalhe').classList.contains('active')) renderAudit();
+  }
+  if(document.getElementById('view-tomadas').classList.contains('active')) renderOutlets();
+  if(document.getElementById('view-conectar').classList.contains('active')) renderConnect();
+  updateBell();
+}
+
+/* =========================================================================
+   NOTIFICAÇÕES
+   ========================================================================= */
+function allAlerts(){
+  let list = [];
+  currentUser.outlets.forEach(o=> o.alerts.forEach(a=> list.push({...a, outlet:o.name})));
+  return list;
+}
+function updateBell(){
+  const unread = allAlerts().filter(a=>!a.read).length;
+  const badge = document.getElementById('bellBadge');
+  if(unread>0){ badge.style.display='flex'; badge.textContent = unread; } else { badge.style.display='none'; }
+  const list = document.getElementById('bellList');
+  const alerts = allAlerts().slice().reverse().slice(0,15);
+  if(alerts.length===0){ list.innerHTML = `<div class="notif-empty">Nenhum alerta registrado.</div>`; return; }
+  const colors = {attention:'var(--yellow)', elevated:'var(--orange)', critical:'var(--red)'};
+  list.innerHTML = alerts.map(a=>`<div class="notif-item" style="border-left:2px solid ${colors[a.level]||'var(--muted)'};">
+    <div>${esc(a.text)}</div><div class="t">${esc(a.outlet)} · ${esc(a.time)}</div></div>`).join('');
+}
+function toggleBell(){ document.getElementById('bellDropdown').classList.toggle('open'); updateBell(); }
+function markAllRead(){ currentUser.outlets.forEach(o=>o.alerts.forEach(a=>a.read=true)); saveDB(); updateBell(); }
+document.addEventListener('click', (e)=>{
+  const wrap = document.querySelector('.bell-wrap');
+  if(wrap && !wrap.contains(e.target)) document.getElementById('bellDropdown').classList.remove('open');
+});
+
+/* =========================================================================
+   CONFIGURAÇÕES
+   ========================================================================= */
+function renderConfig(){
+  const L = currentUser.settings.limits;
+  document.getElementById('lim_normal').value = L.normal;
+  document.getElementById('lim_attention').value = L.attention;
+  document.getElementById('lim_elevated').value = L.elevated;
+  document.getElementById('apiTokenDisplay').textContent = currentUser.settings.apiToken;
+  document.getElementById('cfg_name').value = currentUser.name;
+  document.getElementById('cfg_email').value = currentUser.email;
+  document.getElementById('cfg_curpass').value = '';
+  document.getElementById('cfg_newpass').value = '';
+}
+function saveLimits(){
+  const normal = parseFloat(document.getElementById('lim_normal').value);
+  const attention = parseFloat(document.getElementById('lim_attention').value);
+  const elevated = parseFloat(document.getElementById('lim_elevated').value);
+  if([normal,attention,elevated].some(isNaN) || !(normal<attention && attention<elevated)){
+    toast('Os limites devem ser crescentes: Normal < Atenção < Elevada.'); return;
+  }
+  currentUser.settings.limits = {normal, attention, elevated};
+  saveDB(); toast('Limites de temperatura atualizados.');
+  renderOutlets();
+}
+function copyToken(){
+  navigator.clipboard?.writeText(currentUser.settings.apiToken).then(()=>toast('Token copiado.')).catch(()=>toast('Não foi possível copiar automaticamente.'));
+}
+function regenToken(){
+  currentUser.settings.apiToken = genToken();
+  saveDB(); renderConfig();
+  document.getElementById('payloadExample').textContent =
+`{
+  "user_token": "${currentUser.settings.apiToken}",
+  "device_id": "SW-001",
+  "temperature": 72.4,
+  "timestamp": ${Date.now()}
+}`;
+  toast('Novo token gerado.');
+}
+function saveProfile(){
+  const name = document.getElementById('cfg_name').value.trim();
+  const email = document.getElementById('cfg_email').value.trim().toLowerCase();
+  const curpass = document.getElementById('cfg_curpass').value;
+  const newpass = document.getElementById('cfg_newpass').value;
+  if(!name || !email){ toast('Nome e e-mail são obrigatórios.'); return; }
+
+  if(newpass){
+    if(currentUser.password !== curpass){ toast('Senha atual incorreta.'); return; }
+    currentUser.password = newpass;
+  }
+  if(email !== currentUser.email){
+    if(DB.users[email]){ toast('Este e-mail já está em uso.'); return; }
+    delete DB.users[currentUser.email];
+    currentUser.email = email;
+    DB.users[email] = currentUser;
+    session = email; localStorage.setItem(SESSION_KEY, email);
+  }
+  currentUser.name = name;
+  saveDB();
+  document.getElementById('sidebarAvatar').textContent = initials(currentUser.name);
+  document.getElementById('sidebarName').textContent = currentUser.name;
+  document.getElementById('sidebarEmail').textContent = currentUser.email;
+  toast('Perfil atualizado.');
+}
+
+/* =========================================================================
+   MEU PERFIL
+   ========================================================================= */
+function renderPerfil(){
+  document.getElementById('profileAvatar').textContent = initials(currentUser.name);
+  document.getElementById('profileName').textContent = currentUser.name;
+  document.getElementById('profileEmail').textContent = currentUser.email;
+  document.getElementById('profileProperty').textContent = currentUser.property || 'Não informado';
+  document.getElementById('profileAge').textContent = currentUser.age || 'Não informado';
+  document.getElementById('profileOutletCount').textContent = currentUser.outlets.length;
+  document.getElementById('profileToken').textContent = currentUser.settings.apiToken;
+}
+
+/* =========================================================================
+   INTEGRAÇÃO EM TEMPO REAL COM O SERVIDOR (server.js) VIA SOCKET.IO
+   O ESP envia HTTP POST para o servidor Node.js em /api/temperature; o
+   servidor retransmite o dado para todos os dashboards conectados através
+   do evento "esp_data". Aqui apenas escutamos esse evento e repassamos
+   o payload para receiveESPData(), que já sabe localizar a tomada pelo
+   user_token + device_id e atualizar tela, gráfico, alertas e auditoria.
+   ========================================================================= */
+
+// Ajuste aqui caso o dashboard seja servido de um endereço diferente do
+// servidor Node.js (ex.: abrindo o HTML localmente em vez de via Express).
+// Deixe em branco ("") para conectar automaticamente na mesma origem.
+const SAFEWIRE_SERVER_URL = "";
+
+function setWsBadge(state){
+  const b = document.getElementById('wsStatusBadge');
+  if(!b) return;
+  if(state==='connected'){ b.className='badge real'; b.textContent='🟢 Servidor: conectado'; }
+  else if(state==='error'){ b.className='badge offline'; b.textContent='🔴 Servidor: indisponível'; }
+  else { b.className='badge offline'; b.textContent='⚪ Servidor: conectando…'; }
+}
+
+let socket = null;
+function initSocket(){
+  if(typeof io === 'undefined'){
+    console.warn('Socket.io não carregado — verifique a conexão com a internet ou o CDN.');
+    setWsBadge('error');
+    return;
+  }
+  socket = io(SAFEWIRE_SERVER_URL || undefined, { transports:['websocket','polling'] });
+
+  socket.on('connect', ()=> setWsBadge('connected'));
+  socket.on('disconnect', ()=> setWsBadge('error'));
+  socket.on('connect_error', ()=> setWsBadge('error'));
+
+  // Evento emitido pelo server.js a cada leitura recebida do ESP:
+  // io.emit('esp_data', { user_token, device_id, temperature, timestamp })
+  socket.on('esp_data', (payload)=>{
+    if(!payload || !payload.device_id || typeof payload.temperature !== 'number'){
+      console.warn('Payload esp_data inválido:', payload);
+      return;
+    }
+    // só processa se pertencer ao usuário logado no momento
+    if(session && DB.users[session] && payload.user_token === DB.users[session].settings.apiToken){
+      receiveESPData(payload);
+    }
+  });
+}
+initSocket();
+</script>
+</body>
+</html>
