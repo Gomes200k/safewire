@@ -4,11 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>SafeWire — Painel de monitoramento</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🔌</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<!-- SDK do Socket.io: recebe em tempo real os dados enviados pelo ESP via server.js -->
-<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <style>
 :root{
   --black:#0B0B0B; --white:#F5F5F5; --red:#FF2D2D; --orange:#FF8A00; --yellow:#FFD600;
@@ -51,7 +50,7 @@ input,select,textarea{font-family:inherit;}
 .auth-logo .dot{width:10px;height:10px;border-radius:50%;background:var(--orange);box-shadow:0 0 10px var(--orange);}
 .auth-tag{text-align:center;color:var(--muted);font-size:0.85rem;margin-bottom:32px;}
 .auth-tabs{display:flex;border:1px solid var(--card-border);border-radius:12px;padding:4px;margin-bottom:26px;background:var(--card);}
-.auth-tabs button{flex:1;padding:10px;border:none;background:none;color:var(--muted);border-radius:9px;font-weight:600;font-size:0.88rem;}
+.auth-tabs button{flex:1;padding:10px;border:none;background:none;color:var(--muted);border-radius:999px;font-weight:600;font-size:0.88rem;}
 .auth-tabs button.active{background:var(--white);color:var(--black);}
 .auth-panel{display:none;}
 .auth-panel.active{display:block;}
@@ -305,7 +304,7 @@ canvas{width:100%;height:170px;display:block;}
       <h1 id="pageTitle">Minhas Tomadas</h1>
       <div class="topbar-right">
         <div class="clock" id="clock">--:--:--</div>
-        <span class="badge offline" id="wsStatusBadge" title="Status da conexão com o servidor SafeWire (Socket.io)">⚪ Servidor: conectando…</span>
+        <span class="badge offline" id="wsStatusBadge" title="Status da conexão com o Firebase Realtime Database">⚪ Firebase: conectando…</span>
         <div class="mode-toggle">
           <button id="modeRealBtn" onclick="setMode('real')">🟢 REAL</button>
           <button id="modeDemoBtn" onclick="setMode('demo')">🟡 DEMO</button>
@@ -348,23 +347,22 @@ canvas{width:100%;height:170px;display:block;}
 
       <!-- CONECTAR DISPOSITIVO -->
       <section id="view-conectar" class="view">
-        <div class="section-head"><div><h2 style="font-size:1.3rem;">Conectar dispositivo</h2><p>Status da comunicação entre o protótipo (sensor → Arduino → ESP) e o SafeWire.</p></div></div>
+        <div class="section-head"><div><h2 style="font-size:1.3rem;">Conectar dispositivo</h2><p>Status da comunicação entre o protótipo ESP8266, Firebase e o SafeWire.</p></div></div>
         <div id="connectContainer"></div>
         <div class="panel" style="margin-top:16px;">
           <h3 style="margin-bottom:6px;font-size:1rem;">Arquitetura do protótipo</h3>
-          <p style="color:var(--muted);font-size:0.84rem;">Sensor de temperatura à prova d'água (DS18B20) · Arduino · ESP8266/ESP32 · jumpers & protoboard · conversor de nível lógico · resistor 4,7 kΩ.</p>
+          <p style="color:var(--muted);font-size:0.84rem;">Sensor de temperatura à prova d'água (DS18B20) · ESP8266 NodeMCU · Firebase Realtime Database · Vercel Web App.</p>
           <div class="arch-row">
-            <span class="node">Sensor</span><span class="arrow">→</span>
-            <span class="node">Arduino</span><span class="arrow">→</span>
-            <span class="node">ESP8266/ESP32</span><span class="arrow">→</span>
-            <span class="node">Servidor</span><span class="arrow">→</span>
-            <span class="node">SafeWire</span>
+            <span class="node">Sensor DS18B20</span><span class="arrow">→</span>
+            <span class="node">ESP8266</span><span class="arrow">→</span>
+            <span class="node">Firebase DB</span><span class="arrow">→</span>
+            <span class="node">SafeWire (Vercel)</span>
           </div>
         </div>
         <div class="panel">
-          <h3 style="margin-bottom:10px;font-size:1rem;">Payload enviado pelo ESP</h3>
+          <h3 style="margin-bottom:10px;font-size:1rem;">Payload gravado no Firebase</h3>
           <div class="payload-block" id="payloadExample"></div>
-          <p style="color:var(--muted);font-size:0.76rem;margin-top:12px;">O <code>user_token</code> autentica a conta de destino; o <code>device_id</code> identifica a tomada. Sem comunicação do ESP, nenhuma temperatura é exibida como real.</p>
+          <p style="color:var(--muted);font-size:0.76rem;margin-top:12px;">O ESP8266 envia o JSON com <code>device_id</code> e <code>temperature</code> para o Firebase. O SafeWire escuta o Firebase em tempo real e atualiza o painel instantaneamente.</p>
         </div>
       </section>
 
@@ -497,7 +495,6 @@ function seedDemoUser(){
       id, name, deviceId:devId, location:loc, connected:true, temp:null, history:[], lastReading:null, alerts:[],
       installation:{conductor, gauge, manufacturer, age, installType:'Embutida', equipment, notes:''},
     };
-    // histórico simulado das últimas leituras
     let t = seedTemp;
     const now = Date.now();
     for(let i=9;i>=0;i--){
@@ -510,11 +507,10 @@ function seedDemoUser(){
     return o;
   }
 
-  u.outlets.push(outlet('d1','Tomada da Sala','SW-001','Sala','Cobre','2,5 mm²','Não informado','8 anos','Televisão', 40));
+  u.outlets.push(outlet('d1','Tomada da Sala','SW-001','Sala','Cobre','2,5 mm²','Não informado','8 anos','Televisão', 23.8));
   u.outlets.push(outlet('d2','Tomada da Cozinha','SW-002','Cozinha','Alumínio','1,5 mm²','Não informado','15 anos','Micro-ondas', 63));
   u.outlets.push(outlet('d3','Tomada do Quarto','SW-003','Quarto','Cobre','1,5 mm²','Não informado','5 anos','Ar-condicionado', 30));
 
-  // gera um alerta de exemplo na tomada da cozinha (elevada)
   u.outlets[1].alerts.push({level:'elevated', text:'A temperatura registrada está acima da faixa configurada.', time:u.outlets[1].lastReading, read:false});
 
   DB.users[u.email] = u;
@@ -526,7 +522,7 @@ seedDemoUser();
 
 let session = localStorage.getItem(SESSION_KEY);
 let currentUser = null;
-let currentMode = 'real'; // 'real' | 'demo'
+let currentMode = 'real';
 let demoInterval = null;
 let currentOutletId = null;
 let idCounter = Date.now();
@@ -609,10 +605,9 @@ function enterApp(){
 
   document.getElementById('payloadExample').textContent =
 `{
-  "user_token": "${currentUser.settings.apiToken}",
   "device_id": "SW-001",
-  "temperature": 72.4,
-  "timestamp": ${Date.now()}
+  "temperature": 23.81,
+  "timestamp": ${Math.floor(Date.now()/1000)}
 }`;
 
   currentMode = 'real';
@@ -620,9 +615,6 @@ function enterApp(){
   showView('tomadas');
   renderOutlets();
 }
-
-// auto-login se já houver sessão salva
-if(session && DB.users[session]){ enterApp(); }
 
 /* =========================================================================
    NAVEGAÇÃO
@@ -683,7 +675,7 @@ function setMode(mode, silent){
     }, 2500);
     if(!silent) toast('Modo demonstração ativado — dados simulados.');
   } else {
-    if(!silent) toast('Modo monitoramento real ativado — aguardando dados do protótipo.');
+    if(!silent) toast('Modo monitoramento real ativado — escutando Firebase.');
   }
   renderOutlets();
   if(document.getElementById('view-conectar').classList.contains('active')) renderConnect();
@@ -939,17 +931,7 @@ function renderConnect(){
 }
 function testConnection(id){
   if(currentMode==='demo') toast('Conexão simulada (modo demonstração) — nenhum hardware real conectado.');
-  else toast('Aguardando comunicação com o dispositivo. Nenhum dado real recebido ainda.');
-}
-
-/* Ponto de integração real: chame receiveESPData({user_token, device_id, temperature, timestamp}) */
-function receiveESPData(payload){
-  const user = Object.values(DB.users).find(u=>u.settings.apiToken===payload.user_token);
-  if(!user){ console.warn('Token inválido.'); return; }
-  const o = user.outlets.find(x=>x.deviceId===payload.device_id);
-  if(!o){ console.warn('Tomada não encontrada para device_id', payload.device_id); return; }
-  applyReading(o, payload.temperature, false, payload.timestamp);
-  saveDB();
+  else toast('Escutando o Firebase. Se o ESP enviar dados novos, a página atualiza instantaneamente.');
 }
 
 function applyReading(o, temp, isDemo, ts){
@@ -1034,10 +1016,9 @@ function regenToken(){
   saveDB(); renderConfig();
   document.getElementById('payloadExample').textContent =
 `{
-  "user_token": "${currentUser.settings.apiToken}",
   "device_id": "SW-001",
-  "temperature": 72.4,
-  "timestamp": ${Date.now()}
+  "temperature": 23.81,
+  "timestamp": ${Math.floor(Date.now()/1000)}
 }`;
   toast('Novo token gerado.');
 }
@@ -1080,55 +1061,62 @@ function renderPerfil(){
   document.getElementById('profileToken').textContent = currentUser.settings.apiToken;
 }
 
-/* =========================================================================
-   INTEGRAÇÃO EM TEMPO REAL COM O SERVIDOR (server.js) VIA SOCKET.IO
-   O ESP envia HTTP POST para o servidor Node.js em /api/temperature; o
-   servidor retransmite o dado para todos os dashboards conectados através
-   do evento "esp_data". Aqui apenas escutamos esse evento e repassamos
-   o payload para receiveESPData(), que já sabe localizar a tomada pelo
-   user_token + device_id e atualizar tela, gráfico, alertas e auditoria.
-   ========================================================================= */
+if(session && DB.users[session]){ enterApp(); }
+</script>
 
-// Ajuste aqui caso o dashboard seja servido de um endereço diferente do
-// servidor Node.js (ex.: abrindo o HTML localmente em vez de via Express).
-// Deixe em branco ("") para conectar automaticamente na mesma origem.
-const SAFEWIRE_SERVER_URL = "";
+<!-- =========================================================================
+   INTEGRAÇÃO EM TEMPO REAL DIRETA COM O FIREBASE REALTIME DATABASE
+   ========================================================================= -->
+<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
-function setWsBadge(state){
-  const b = document.getElementById('wsStatusBadge');
-  if(!b) return;
-  if(state==='connected'){ b.className='badge real'; b.textContent='🟢 Servidor: conectado'; }
-  else if(state==='error'){ b.className='badge offline'; b.textContent='🔴 Servidor: indisponível'; }
-  else { b.className='badge offline'; b.textContent='⚪ Servidor: conectando…'; }
-}
+  const firebaseConfig = {
+    databaseURL: "https://safewire-57bfc-default-rtdb.firebaseio.com"
+  };
 
-let socket = null;
-function initSocket(){
-  if(typeof io === 'undefined'){
-    console.warn('Socket.io não carregado — verifique a conexão com a internet ou o CDN.');
-    setWsBadge('error');
-    return;
+  const app = initializeApp(firebaseConfig);
+  const db = getDatabase(app);
+
+  function setWsBadge(state){
+    const b = document.getElementById('wsStatusBadge');
+    if(!b) return;
+    if(state==='connected'){ b.className='badge real'; b.textContent='🟢 Firebase: conectado'; }
+    else if(state==='error'){ b.className='badge offline'; b.textContent='🔴 Firebase: erro'; }
+    else { b.className='badge offline'; b.textContent='⚪ Firebase: conectando…'; }
   }
-  socket = io(SAFEWIRE_SERVER_URL || undefined, { transports:['websocket','polling'] });
 
-  socket.on('connect', ()=> setWsBadge('connected'));
-  socket.on('disconnect', ()=> setWsBadge('error'));
-  socket.on('connect_error', ()=> setWsBadge('error'));
+  setWsBadge('connecting');
 
-  // Evento emitido pelo server.js a cada leitura recebida do ESP:
-  // io.emit('esp_data', { user_token, device_id, temperature, timestamp })
-  socket.on('esp_data', (payload)=>{
-    if(!payload || !payload.device_id || typeof payload.temperature !== 'number'){
-      console.warn('Payload esp_data inválido:', payload);
-      return;
+  const leiturasRef = ref(db, 'leituras');
+
+  onValue(leiturasRef, (snapshot) => {
+    const leituras = snapshot.val();
+    setWsBadge('connected');
+    
+    if (!leituras) return;
+
+    if (window.currentUser && window.currentUser.outlets) {
+      let updated = false;
+
+      Object.keys(leituras).forEach(deviceId => {
+        const item = leituras[deviceId];
+        if (item && item.temperature !== undefined) {
+          const tomada = window.currentUser.outlets.find(o => o.deviceId === deviceId || o.deviceId === item.device_id);
+          if (tomada) {
+            const tsMs = item.timestamp ? (item.timestamp < 10000000000 ? item.timestamp * 1000 : item.timestamp) : Date.now();
+            window.applyReading(tomada, parseFloat(item.temperature), false, tsMs);
+            updated = true;
+          }
+        }
+      });
+
+      if (updated) window.saveDB();
     }
-    // só processa se pertencer ao usuário logado no momento
-    if(session && DB.users[session] && payload.user_token === DB.users[session].settings.apiToken){
-      receiveESPData(payload);
-    }
+  }, (error) => {
+    console.error("Erro na leitura do Firebase:", error);
+    setWsBadge('error');
   });
-}
-initSocket();
 </script>
 </body>
 </html>
