@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -1061,62 +1062,94 @@ function renderPerfil(){
   document.getElementById('profileToken').textContent = currentUser.settings.apiToken;
 }
 
+// Ponte segura entre o script clássico do painel e a integração Firebase em módulo.
+window.applyFirebaseReading = function(deviceId, item) {
+  if (!currentUser || !Array.isArray(currentUser.outlets) || !item) return false;
+  const tomada = currentUser.outlets.find(o =>
+    o.deviceId === deviceId || o.deviceId === item.device_id
+  );
+  if (!tomada || item.temperature === undefined) return false;
+  const tsMs = item.timestamp
+    ? (item.timestamp < 10000000000 ? item.timestamp * 1000 : item.timestamp)
+    : Date.now();
+  applyReading(tomada, Number(item.temperature), false, tsMs);
+  saveDB();
+  return true;
+};
+
 if(session && DB.users[session]){ enterApp(); }
 </script>
 
 <!-- =========================================================================
-   INTEGRAÇÃO EM TEMPO REAL DIRETA COM O FIREBASE REALTIME DATABASE
+   FIREBASE REALTIME DATABASE — leitura autenticada em tempo real
+   Preencha firebaseConfig com os dados do app Web no Firebase Console.
    ========================================================================= -->
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
   import { getDatabase, ref, onValue } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
 
   const firebaseConfig = {
-    databaseURL: "https://safewire-57bfc-default-rtdb.firebaseio.com"
+    apiKey: "COLE_AQUI_A_API_KEY_DO_APP_WEB",
+    authDomain: "safewire-57bfc.firebaseapp.com",
+    databaseURL: "https://safewire-57bfc-default-rtdb.firebaseio.com",
+    projectId: "safewire-57bfc",
+    appId: "COLE_AQUI_O_APP_ID_DO_APP_WEB"
   };
 
-  const app = initializeApp(firebaseConfig);
-  const db = getDatabase(app);
-
-  function setWsBadge(state){
+  function setWsBadge(state, detail = "") {
     const b = document.getElementById('wsStatusBadge');
-    if(!b) return;
-    if(state==='connected'){ b.className='badge real'; b.textContent='🟢 Firebase: conectado'; }
-    else if(state==='error'){ b.className='badge offline'; b.textContent='🔴 Firebase: erro'; }
-    else { b.className='badge offline'; b.textContent='⚪ Firebase: conectando…'; }
+    if (!b) return;
+    if (state === 'connected') {
+      b.className = 'badge real';
+      b.textContent = '🟢 Firebase: conectado';
+      b.title = 'Firebase autenticado e recebendo atualizações em tempo real';
+    } else if (state === 'error') {
+      b.className = 'badge offline';
+      b.textContent = '🔴 Firebase: erro';
+      b.title = detail || 'Confira a configuração e as regras do Firebase.';
+    } else {
+      b.className = 'badge offline';
+      b.textContent = '⚪ Firebase: conectando…';
+    }
+  }
+
+  async function startFirebaseListener() {
+    if (!firebaseConfig.apiKey.startsWith("AIza") ||
+        firebaseConfig.appId.startsWith("COLE_AQUI")) {
+      setWsBadge('error', 'Falta preencher apiKey e appId no firebaseConfig do index.html.');
+      console.error('SafeWire Firebase: preencha apiKey e appId com os valores do Firebase Console.');
+      return;
+    }
+
+    try {
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const credential = await signInAnonymously(auth);
+      console.info('SafeWire: Firebase autenticado para leitura.', credential.user.uid);
+
+      const db = getDatabase(app);
+      onValue(ref(db, 'leituras'), (snapshot) => {
+        const leituras = snapshot.val() || {};
+        setWsBadge('connected');
+        Object.entries(leituras).forEach(([deviceId, item]) => {
+          if (item && item.temperature !== undefined &&
+              typeof window.applyFirebaseReading === 'function') {
+            window.applyFirebaseReading(deviceId, item);
+          }
+        });
+      }, (error) => {
+        console.error('Erro ao ler Firebase:', error);
+        setWsBadge('error', error.message);
+      });
+    } catch (error) {
+      console.error('Falha ao conectar/autenticar no Firebase:', error);
+      setWsBadge('error', error.message);
+    }
   }
 
   setWsBadge('connecting');
-
-  const leiturasRef = ref(db, 'leituras');
-
-  onValue(leiturasRef, (snapshot) => {
-    const leituras = snapshot.val();
-    setWsBadge('connected');
-    
-    if (!leituras) return;
-
-    if (window.currentUser && window.currentUser.outlets) {
-      let updated = false;
-
-      Object.keys(leituras).forEach(deviceId => {
-        const item = leituras[deviceId];
-        if (item && item.temperature !== undefined) {
-          const tomada = window.currentUser.outlets.find(o => o.deviceId === deviceId || o.deviceId === item.device_id);
-          if (tomada) {
-            const tsMs = item.timestamp ? (item.timestamp < 10000000000 ? item.timestamp * 1000 : item.timestamp) : Date.now();
-            window.applyReading(tomada, parseFloat(item.temperature), false, tsMs);
-            updated = true;
-          }
-        }
-      });
-
-      if (updated) window.saveDB();
-    }
-  }, (error) => {
-    console.error("Erro na leitura do Firebase:", error);
-    setWsBadge('error');
-  });
+  startFirebaseListener();
 </script>
 </body>
 </html>
