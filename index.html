@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -11,8 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
-  --black:#0B0B0B; --white:#F5F5F5; --red:#FF2D2D; --orange:#FF8A00; --yellow:#FFD600;
-  --card:#151515; --card-border:#242424; --muted:#8a8a8a; --green:#28D17C;
+  --black:#0d0a07; --white:#F5F5F5; --red:#FF3B3B; --orange:#FF8A00; --yellow:#FFC700;
+  --card:#18120c; --card-border:#332218; --muted:#9d897c; --green:#28D17C;
   --sans:'Space Grotesk',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
 }
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -52,15 +51,15 @@ input,select,textarea{font-family:inherit;}
 .auth-tag{text-align:center;color:var(--muted);font-size:0.85rem;margin-bottom:32px;}
 .auth-tabs{display:flex;border:1px solid var(--card-border);border-radius:12px;padding:4px;margin-bottom:26px;background:var(--card);}
 .auth-tabs button{flex:1;padding:10px;border:none;background:none;color:var(--muted);border-radius:999px;font-weight:600;font-size:0.88rem;}
-.auth-tabs button.active{background:var(--white);color:var(--black);}
+.auth-tabs button.active{background:var(--orange);color:var(--black);font-weight:700;}
 .auth-panel{display:none;}
 .auth-panel.active{display:block;}
 .field{margin-bottom:15px;}
 .field label{display:block;font-size:0.78rem;color:var(--muted);margin-bottom:6px;}
 .field input, .field select, .field textarea{
-  width:100%;background:#0f0f0f;border:1px solid var(--card-border);border-radius:9px;padding:11px 13px;
+  width:100%;background:#0f0f0f;border:1px solid var(--card-border);border-radius:999px;padding:11px 13px;
   color:var(--white);font-size:0.9rem;}
-.field input:focus,.field select:focus,.field textarea:focus{outline:1px solid var(--orange);border-color:var(--orange);}
+.field input:focus,.field select:focus,.field textarea:focus{outline:1px solid var(--orange);border-color:var(--orange);box-shadow:0 0 8px rgba(255,138,0,0.25);}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
 .form-error{background:rgba(255,45,45,.1);border:1px solid #3a1515;color:#ff8080;font-size:0.82rem;padding:10px 13px;border-radius:9px;margin-bottom:16px;display:none;}
 .form-error.show{display:block;}
@@ -88,7 +87,7 @@ input,select,textarea{font-family:inherit;}
 }
 .sidebar-nav button .ic{font-size:1rem;flex-shrink:0;width:18px;text-align:center;}
 .sidebar-nav button:hover{color:var(--white);background:#1c1c1c;}
-.sidebar-nav button.active{color:var(--black);background:var(--white);}
+.sidebar-nav button.active{color:var(--black);background:var(--orange);font-weight:700;}
 .sidebar-user{padding:14px;border-top:1px solid var(--card-border);}
 .sidebar-user-inner{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;}
 .avatar{width:34px;height:34px;border-radius:50%;background:var(--orange);color:var(--black);font-weight:700;
@@ -102,7 +101,7 @@ input,select,textarea{font-family:inherit;}
 .main-col{flex:1;min-width:0;display:flex;flex-direction:column;}
 .topbar{
   position:sticky;top:0;z-index:40;display:flex;align-items:center;justify-content:space-between;gap:16px;
-  padding:16px 28px;border-bottom:1px solid var(--card-border);background:rgba(11,11,11,.92);backdrop-filter:blur(8px);
+  padding:16px 28px;border-bottom:1px solid var(--card-border);background:rgba(13,10,7,.92);backdrop-filter:blur(8px);
   flex-wrap:wrap;
 }
 .topbar h1{font-size:1.25rem;font-weight:600;}
@@ -143,7 +142,7 @@ main.content{padding:28px;max-width:1100px;width:100%;margin:0 auto;}
 
 .outlet-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:16px;}
 .outlet-card{border:1px solid var(--card-border);background:var(--card);border-radius:16px;padding:20px;display:flex;flex-direction:column;gap:12px;transition:.15s;}
-.outlet-card:hover{border-color:#333;}
+.outlet-card:hover{border-color:var(--orange);}
 .outlet-card .top{display:flex;justify-content:space-between;align-items:flex-start;}
 .outlet-card .name{font-weight:600;font-size:1rem;}
 .outlet-card .id{font-family:var(--mono);color:var(--muted);font-size:0.72rem;margin-top:2px;}
@@ -260,16 +259,6 @@ canvas{width:100%;height:170px;display:block;}
         <div class="field"><label>Senha</label><input type="password" id="su_password"></div>
         <div class="field"><label>Confirmar senha</label><input type="password" id="su_password2"></div>
       </div>
-      <div class="field">
-        <label>Tipo de imóvel</label>
-        <select id="su_property">
-          <option>Residencial - Casa</option>
-          <option>Residencial - Apartamento</option>
-          <option>Comercial</option>
-          <option>Industrial</option>
-        </select>
-      </div>
-      <div class="field"><label>Idade aproximada da instalação elétrica principal</label><input type="text" id="su_age" placeholder="Ex.: 10 anos"></div>
       <button class="btn primary full" onclick="doSignup()">Criar conta</button>
     </div>
 
@@ -436,24 +425,6 @@ canvas{width:100%;height:170px;display:block;}
       <div class="field"><label>ID do dispositivo</label><input type="text" id="f_id" placeholder="Ex.: SW-001"></div>
       <div class="field"><label>Localização (auxiliar)</label><input type="text" id="f_location" placeholder="Ex.: Sala"></div>
     </div>
-    <div class="fieldset-title">Dados da instalação</div>
-    <div class="field-row">
-      <div class="field"><label>Tipo de condutor</label>
-        <select id="f_conductor"><option>Não informado</option><option>Cobre</option><option>Alumínio</option></select>
-      </div>
-      <div class="field"><label>Bitola do fio</label>
-        <select id="f_gauge"><option>Não informado</option><option>1,5 mm²</option><option>2,5 mm²</option><option>4 mm²</option><option>6 mm²</option><option>10 mm²</option><option>Outro</option></select>
-      </div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Fabricante/marca do fio</label><input type="text" id="f_manufacturer" placeholder="Opcional"></div>
-      <div class="field"><label>Idade aproximada do ponto</label><input type="text" id="f_age" placeholder="Opcional"></div>
-    </div>
-    <div class="field-row">
-      <div class="field"><label>Tipo de instalação</label><input type="text" id="f_installtype" placeholder="Embutida, aparente, canaleta..."></div>
-      <div class="field"><label>Equipamento normalmente conectado</label><input type="text" id="f_equipment" placeholder="Ex.: Computador"></div>
-    </div>
-    <div class="field"><label>Observações técnicas</label><textarea id="f_notes" rows="2"></textarea></div>
     <div class="modal-actions">
       <button class="btn ghost" onclick="closeModal('addModal')">Cancelar</button>
       <button class="btn primary full" onclick="saveOutlet()">Adicionar tomada</button>
@@ -569,8 +540,8 @@ function doSignup(){
   const email = document.getElementById('su_email').value.trim().toLowerCase();
   const pass = document.getElementById('su_password').value;
   const pass2 = document.getElementById('su_password2').value;
-  const property = document.getElementById('su_property').value;
-  const age = document.getElementById('su_age').value.trim() || 'Não informado';
+  const property = 'Não informado';
+  const age = 'Não informado';
 
   if(!name || !email || !pass || !pass2){ showAuthError('Preencha todos os campos obrigatórios.'); return; }
   if(!email.includes('@')){ showAuthError('Informe um e-mail válido.'); return; }
@@ -701,23 +672,24 @@ function saveOutlet(){
   const name = document.getElementById('f_name').value.trim();
   const devId = document.getElementById('f_id').value.trim();
   if(!name || !devId){ toast('Preencha nome e ID do dispositivo.'); return; }
+  const locEl = document.getElementById('f_location');
   const outlet = {
-    id: uid(), name, deviceId:devId, location:document.getElementById('f_location').value.trim(),
+    id: uid(), name, deviceId:devId, location: locEl ? locEl.value.trim() : '',
     connected:false, temp:null, history:[], lastReading:null, alerts:[],
     installation:{
-      conductor: document.getElementById('f_conductor').value,
-      gauge: document.getElementById('f_gauge').value,
-      manufacturer: document.getElementById('f_manufacturer').value.trim() || 'Não informado',
-      age: document.getElementById('f_age').value.trim() || 'Não informado',
-      installType: document.getElementById('f_installtype').value.trim() || 'Não informado',
-      equipment: document.getElementById('f_equipment').value.trim() || 'Não informado',
-      notes: document.getElementById('f_notes').value.trim(),
+      conductor: 'Não informado',
+      gauge: 'Não informado',
+      manufacturer: 'Não informado',
+      age: 'Não informado',
+      installType: 'Não informado',
+      equipment: 'Não informado',
+      notes: '',
     },
   };
   currentUser.outlets.push(outlet);
   saveDB();
   closeModal('addModal');
-  ['f_name','f_id','f_location','f_manufacturer','f_age','f_installtype','f_equipment','f_notes'].forEach(id=>document.getElementById(id).value='');
+  ['f_name','f_id','f_location'].forEach(id=>{ const el = document.getElementById(id); if(el) el.value=''; });
   toast('Tomada adicionada.');
   renderOutlets();
   if(currentMode==='demo') setMode('demo', true);
